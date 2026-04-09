@@ -24,6 +24,11 @@ export interface RecommendationHistory {
   wardrobeItemId: string;
   imageUrl: string;
   recommendation: string;
+  desiredStyle?: string;
+  occasion?: string;
+  weather?: string;
+  budget?: string;
+  feedback?: "like" | "dislike";
   createdAt?: unknown;
 }
 
@@ -38,4 +43,12 @@ export interface VisionRecommendationResult {
   summary: string;
   styleTip: string;
   items: RecommendedProductItem[];
+}
+
+export interface ShoppingProduct {
+  title: string;
+  image: string;
+  lprice: string;
+  mallName: string;
+  productLink: string;
 }

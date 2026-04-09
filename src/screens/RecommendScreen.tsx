@@ -7,9 +7,10 @@ import { useAuth } from "../hooks/useAuth";
 import { getUserProfile } from "../services/userProfileService";
 import { requestVisionRecommendation } from "../services/openai";
 import { saveRecommendationHistory } from "../services/recommendationService";
+import { searchNaverShoppingProduct } from "../services/naverShoppingService";
 import { colors, spacing } from "../theme";
 import { LoadingOverlay } from "../components/LoadingOverlay";
-import { VisionRecommendationResult } from "../types";
+import { ShoppingProduct, VisionRecommendationResult } from "../types";
 import { TextField } from "../components/TextField";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Recommend">;
@@ -20,10 +21,17 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VisionRecommendationResult | null>(null);
   const [desiredStyle, setDesiredStyle] = useState("");
+  const [occasion, setOccasion] = useState("데일리");
+  const [weather, setWeather] = useState("선선함");
+  const [budget, setBudget] = useState("");
+  const [historyId, setHistoryId] = useState("");
+  const [productMap, setProductMap] = useState<Record<string, ShoppingProduct | null>>({});
 
   const hasResult = useMemo(() => Boolean(result), [result]);
   const lineColors = ["#60A5FA", "#F59E0B", "#F472B6", "#34D399", "#A78BFA"];
   const styleOptions = ["미니멀", "스트릿", "캐주얼", "포멀", "러블리", "오피스"];
+  const occasionOptions = ["데일리", "출근", "데이트", "여행", "하객"];
+  const weatherOptions = ["추움", "선선함", "더움", "비오는 날"];
 
   const openShoppingLink = async (mall: "naver" | "coupang" | "musinsa", keyword: string) => {
     const encoded = encodeURIComponent(keyword);
@@ -51,14 +59,30 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
         imageUrl,
         profileText,
         desiredStyle,
+        occasion,
+        weather,
+        budget,
       });
       setResult(recommendationResult);
-      await saveRecommendationHistory({
+      const products = await Promise.all(
+        recommendationResult.items.map((item) => searchNaverShoppingProduct(item.searchKeyword)),
+      );
+      const nextMap: Record<string, ShoppingProduct | null> = {};
+      products.forEach((product, idx) => {
+        nextMap[String(idx)] = product;
+      });
+      setProductMap(nextMap);
+      const savedHistoryId = await saveRecommendationHistory({
         uid: user.uid,
         wardrobeItemId,
         imageUrl,
         recommendation: JSON.stringify(recommendationResult),
+        desiredStyle,
+        occasion,
+        weather,
+        budget,
       });
+      setHistoryId(savedHistoryId);
     } catch (e) {
       Alert.alert("오류", e instanceof Error ? e.message : "추천 생성에 실패했습니다.");
     } finally {
@@ -78,6 +102,12 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
         onChangeText={setDesiredStyle}
         placeholder="예: 소개팅룩, 출근룩, 힙한 스트릿"
       />
+      <TextField
+        label="예산 (선택)"
+        value={budget}
+        onChangeText={setBudget}
+        placeholder="예: 10만원 이하, 상의 5만원 이하"
+      />
       <View style={styles.styleChipRow}>
         {styleOptions.map((style) => (
           <Pressable
@@ -92,6 +122,38 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
             </Text>
           </Pressable>
         ))}
+      </View>
+      <View style={styles.filterSection}>
+        <Text style={styles.filterLabel}>상황</Text>
+        <View style={styles.styleChipRow}>
+          {occasionOptions.map((item) => (
+            <Pressable
+              key={item}
+              style={[styles.styleChip, occasion === item && styles.styleChipActive]}
+              onPress={() => setOccasion(item)}
+            >
+              <Text style={[styles.styleChipText, occasion === item && styles.styleChipTextActive]}>
+                {item}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+      <View style={styles.filterSection}>
+        <Text style={styles.filterLabel}>날씨</Text>
+        <View style={styles.styleChipRow}>
+          {weatherOptions.map((item) => (
+            <Pressable
+              key={item}
+              style={[styles.styleChip, weather === item && styles.styleChipActive]}
+              onPress={() => setWeather(item)}
+            >
+              <Text style={[styles.styleChipText, weather === item && styles.styleChipTextActive]}>
+                {item}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
       <Button title="AI 추천 받기" onPress={onRecommend} loading={loading} />
 
@@ -116,22 +178,43 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
                     <Text style={styles.linkLabel}>내 옷장에서 매칭됨</Text>
                   </View>
                   <View style={styles.itemTopRow}>
-                    <View style={styles.thumb}>
-                      <Text style={styles.thumbText}>상품</Text>
-                      <Text style={styles.thumbSub}>썸네일</Text>
-                    </View>
+                    {productMap[String(idx)]?.image ? (
+                      <Image source={{ uri: productMap[String(idx)]?.image }} style={styles.productImage} />
+                    ) : (
+                      <View style={styles.thumb}>
+                        <Text style={styles.thumbText}>상품</Text>
+                        <Text style={styles.thumbSub}>썸네일</Text>
+                      </View>
+                    )}
                     <View style={styles.itemTextWrap}>
                       <Text style={styles.itemCategory}>{item.category}</Text>
-                      <Text style={styles.itemTitle}>{item.title}</Text>
+                      <Text style={styles.itemTitle}>
+                        {productMap[String(idx)]?.title || item.title}
+                      </Text>
                       <Text style={styles.itemDesc}>{item.description}</Text>
+                      {productMap[String(idx)]?.lprice ? (
+                        <Text style={styles.priceText}>
+                          최저가 {Number(productMap[String(idx)]?.lprice || 0).toLocaleString()}원 ·{" "}
+                          {productMap[String(idx)]?.mallName}
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
                   <View style={styles.shopButtonsRow}>
                     <Pressable
                       style={styles.mallButton}
-                      onPress={() => openShoppingLink("naver", item.searchKeyword)}
+                      onPress={async () => {
+                        const link = productMap[String(idx)]?.productLink;
+                        if (link) {
+                          await Linking.openURL(link);
+                          return;
+                        }
+                        await openShoppingLink("naver", item.searchKeyword);
+                      }}
                     >
-                      <Text style={styles.mallButtonText}>네이버쇼핑</Text>
+                      <Text style={styles.mallButtonText}>
+                        {productMap[String(idx)]?.productLink ? "네이버 상품" : "네이버쇼핑"}
+                      </Text>
                     </Pressable>
                     <Pressable
                       style={styles.mallButton}
@@ -158,6 +241,36 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
           <Text style={styles.emptyDesc}>AI 추천 받기 버튼을 누르면 매칭 결과와 쇼핑 링크가 표시됩니다.</Text>
         </View>
       )}
+
+      {hasResult && historyId ? (
+        <View style={styles.feedbackCard}>
+          <Text style={styles.feedbackTitle}>이 추천이 마음에 드셨나요?</Text>
+          <View style={styles.feedbackRow}>
+            <Pressable
+              style={styles.feedbackButton}
+              onPress={async () => {
+                if (!user) return;
+                const { updateRecommendationFeedback } = await import("../services/recommendationService");
+                await updateRecommendationFeedback({ uid: user.uid, historyId, feedback: "like" });
+                Alert.alert("고마워요!", "선호 데이터를 반영해서 다음 추천을 더 정확하게 만들게요.");
+              }}
+            >
+              <Text style={styles.feedbackButtonText}>👍 좋아요</Text>
+            </Pressable>
+            <Pressable
+              style={styles.feedbackButton}
+              onPress={async () => {
+                if (!user) return;
+                const { updateRecommendationFeedback } = await import("../services/recommendationService");
+                await updateRecommendationFeedback({ uid: user.uid, historyId, feedback: "dislike" });
+                Alert.alert("확인했어요", "다음 추천에서 다른 스타일로 조정해볼게요.");
+              }}
+            >
+              <Text style={styles.feedbackButtonText}>👎 별로예요</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       <LoadingOverlay visible={loading} message="AI 분석 중..." />
     </ScrollView>
@@ -214,6 +327,14 @@ const styles = StyleSheet.create({
   },
   styleChipTextActive: {
     color: colors.primary,
+  },
+  filterSection: {
+    gap: 6,
+  },
+  filterLabel: {
+    color: colors.text,
+    fontWeight: "700",
+    fontSize: 13,
   },
   resultBoard: {
     backgroundColor: "#EAF0FA",
@@ -321,6 +442,12 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  productImage: {
+    width: 62,
+    height: 62,
+    borderRadius: 8,
+    backgroundColor: "#E5E7EB",
+  },
   itemCategory: {
     color: colors.primary,
     fontSize: 12,
@@ -335,6 +462,12 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 12,
     lineHeight: 17,
+  },
+  priceText: {
+    color: "#111827",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
   },
   shopButtonsRow: {
     flexDirection: "row",
@@ -390,5 +523,34 @@ const styles = StyleSheet.create({
     color: colors.subText,
     textAlign: "center",
     fontSize: 13,
+  },
+  feedbackCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: spacing.md,
+    gap: 10,
+  },
+  feedbackTitle: {
+    color: colors.text,
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  feedbackRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  feedbackButton: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  feedbackButtonText: {
+    color: colors.text,
+    fontWeight: "700",
   },
 });

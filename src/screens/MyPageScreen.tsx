@@ -42,6 +42,7 @@ export function MyPageScreen(): React.JSX.Element {
         <Text style={styles.item}>선호 스타일: {profile?.preferredStyle || "-"}</Text>
       </View>
       <Button title="온보딩 정보 수정" onPress={() => rootNavigation.navigate("Onboarding", { isEdit: true })} />
+      <Button title="추천 히스토리 보기" onPress={() => rootNavigation.navigate("RecommendationHistory")} />
       <Button title="로그아웃" onPress={onLogout} variant="ghost" />
     </View>
   );

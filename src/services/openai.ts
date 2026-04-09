@@ -22,6 +22,9 @@ export async function requestVisionRecommendation(params: {
   imageUrl: string;
   profileText: string;
   desiredStyle?: string;
+  occasion?: string;
+  weather?: string;
+  budget?: string;
 }): Promise<VisionRecommendationResult> {
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
   if (!apiKey) {
@@ -48,7 +51,9 @@ export async function requestVisionRecommendation(params: {
               type: "text",
               text: `사용자 체형 정보: ${params.profileText}\n원하는 스타일: ${
                 params.desiredStyle?.trim() ? params.desiredStyle : "미입력"
-              }\n반드시 원하는 스타일을 최우선으로 반영하세요.`,
+              }\n상황: ${params.occasion?.trim() ? params.occasion : "일반"}\n날씨: ${
+                params.weather?.trim() ? params.weather : "보통"
+              }\n예산: ${params.budget?.trim() ? params.budget : "제한 없음"}\n반드시 원하는 스타일과 상황/예산을 최우선으로 반영하세요.`,
             },
             { type: "image_url", image_url: { url: params.imageUrl } },
           ],

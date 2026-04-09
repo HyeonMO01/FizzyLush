@@ -5,6 +5,7 @@ import { LoginScreen } from "../screens/LoginScreen";
 import { SignUpScreen } from "../screens/SignUpScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { RecommendScreen } from "../screens/RecommendScreen";
+import { RecommendationHistoryScreen } from "../screens/RecommendationHistoryScreen";
 import { MainTabNavigator } from "./MainTabNavigator";
 
 export type RootStackParamList = {
@@ -17,6 +18,7 @@ export type RootStackParamList = {
     wardrobeItemId: string;
     imageUrl: string;
   };
+  RecommendationHistory: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -39,6 +41,11 @@ export function RootNavigator(): React.JSX.Element {
       />
       <Stack.Screen name="MainTabs" component={MainTabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="Recommend" component={RecommendScreen} options={{ title: "AI 추천" }} />
+      <Stack.Screen
+        name="RecommendationHistory"
+        component={RecommendationHistoryScreen}
+        options={{ title: "추천 히스토리" }}
+      />
     </Stack.Navigator>
   );
 }
