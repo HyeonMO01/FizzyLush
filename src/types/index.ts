@@ -6,6 +6,7 @@ export interface UserProfile {
   height?: number;
   weight?: number;
   bodyType?: BodyType;
+  preferredStyle?: string;
   onboardingComplete: boolean;
   createdAt?: unknown;
 }

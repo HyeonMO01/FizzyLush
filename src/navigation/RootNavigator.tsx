@@ -11,7 +11,7 @@ export type RootStackParamList = {
   Splash: undefined;
   Login: undefined;
   SignUp: undefined;
-  Onboarding: undefined;
+  Onboarding: { isEdit?: boolean } | undefined;
   MainTabs: undefined;
   Recommend: {
     wardrobeItemId: string;

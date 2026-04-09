@@ -35,12 +35,14 @@ export async function updateOnboardingProfile(params: {
   height: number;
   weight: number;
   bodyType: BodyType;
+  preferredStyle?: string;
 }): Promise<void> {
   const userRef = doc(db, "users", params.uid);
   await updateDoc(userRef, {
     height: params.height,
     weight: params.weight,
     bodyType: params.bodyType,
+    preferredStyle: params.preferredStyle ?? "",
     onboardingComplete: true,
   });
 }

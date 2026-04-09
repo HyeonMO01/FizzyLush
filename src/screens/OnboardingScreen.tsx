@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Keyboard,
   Pressable,
@@ -14,20 +14,39 @@ import { TextField } from "../components/TextField";
 import { Button } from "../components/Button";
 import { useAuth } from "../hooks/useAuth";
 import { BodyType } from "../types";
-import { updateOnboardingProfile } from "../services/userProfileService";
+import { getUserProfile, updateOnboardingProfile } from "../services/userProfileService";
 import { colors, spacing } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Onboarding">;
 const BODY_TYPES: BodyType[] = ["슬림", "보통", "통통"];
 
-export function OnboardingScreen({ navigation }: Props): React.JSX.Element {
+export function OnboardingScreen({ navigation, route }: Props): React.JSX.Element {
   const { user } = useAuth();
+  const isEdit = Boolean(route.params?.isEdit);
   const weightInputRef = useRef<TextInput>(null);
+  const styleInputRef = useRef<TextInput>(null);
   const [height, setHeight] = useState("");
   const [weight, setWeight] = useState("");
   const [bodyType, setBodyType] = useState<BodyType>("보통");
+  const [preferredStyle, setPreferredStyle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const styleOptions = ["미니멀", "스트릿", "캐주얼", "포멀", "러블리"];
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (!user) return;
+      const profile = await getUserProfile(user.uid);
+      if (!profile) return;
+      setHeight(profile.height ? String(profile.height) : "");
+      setWeight(profile.weight ? String(profile.weight) : "");
+      setBodyType(profile.bodyType ?? "보통");
+      setPreferredStyle(profile.preferredStyle ?? "");
+    };
+    if (isEdit) {
+      loadProfile();
+    }
+  }, [isEdit, user]);
 
   const onSave = async () => {
     if (!user) {
@@ -46,8 +65,13 @@ export function OnboardingScreen({ navigation }: Props): React.JSX.Element {
         height: Number(height),
         weight: Number(weight),
         bodyType,
+        preferredStyle,
       });
-      navigation.replace("MainTabs");
+      if (isEdit) {
+        navigation.goBack();
+      } else {
+        navigation.replace("MainTabs");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "저장에 실패했습니다.");
     } finally {
@@ -58,7 +82,7 @@ export function OnboardingScreen({ navigation }: Props): React.JSX.Element {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
-      <Text style={styles.title}>체형 정보를 입력해주세요</Text>
+      <Text style={styles.title}>{isEdit ? "온보딩 정보 수정" : "체형 정보를 입력해주세요"}</Text>
       <TextField
         label="키 (cm)"
         value={height}
@@ -73,10 +97,34 @@ export function OnboardingScreen({ navigation }: Props): React.JSX.Element {
         value={weight}
         onChangeText={setWeight}
         keyboardType="numeric"
-        returnKeyType="done"
-        onSubmitEditing={() => Keyboard.dismiss()}
+        returnKeyType="next"
+        blurOnSubmit={false}
+        onSubmitEditing={() => styleInputRef.current?.focus()}
         inputRef={weightInputRef}
       />
+      <TextField
+        label="선호 스타일 (선택)"
+        value={preferredStyle}
+        onChangeText={setPreferredStyle}
+        placeholder="예: 미니멀, 스트릿, 데이트룩"
+        returnKeyType="done"
+        onSubmitEditing={() => Keyboard.dismiss()}
+        inputRef={styleInputRef}
+      />
+      <Text style={styles.label}>빠른 스타일 선택</Text>
+      <View style={styles.row}>
+        {styleOptions.map((item) => (
+          <Pressable
+            key={item}
+            style={[styles.chip, preferredStyle === item && styles.chipActive]}
+            onPress={() => setPreferredStyle(item)}
+          >
+            <Text style={[styles.chipText, preferredStyle === item && styles.chipTextActive]}>
+              {item}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
       <Text style={styles.label}>체형 선택</Text>
       <View style={styles.row}>
         {BODY_TYPES.map((item) => (
@@ -90,7 +138,7 @@ export function OnboardingScreen({ navigation }: Props): React.JSX.Element {
         ))}
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Button title="저장하고 시작하기" onPress={onSave} loading={loading} />
+      <Button title={isEdit ? "수정 저장하기" : "저장하고 시작하기"} onPress={onSave} loading={loading} />
       </View>
     </TouchableWithoutFeedback>
   );
@@ -118,6 +166,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
