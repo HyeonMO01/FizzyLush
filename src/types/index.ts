@@ -19,30 +19,66 @@ export interface WardrobeItem {
   aiSummary: string;
 }
 
+export type RecommendationFeedback = "like" | "dislike";
+export type RecommendationPayload = string;
+
 export interface RecommendationHistory {
   id: string;
   wardrobeItemId: string;
   imageUrl: string;
-  recommendation: string;
+  recommendation: RecommendationPayload;
   desiredStyle?: string;
   occasion?: string;
   weather?: string;
   budget?: string;
-  feedback?: "like" | "dislike";
+  feedback?: RecommendationFeedback;
   createdAt?: unknown;
 }
 
 export interface RecommendedProductItem {
-  category: "상의" | "하의" | "아우터" | "신발" | "액세서리";
+  category: string;
   title: string;
   description: string;
   searchKeyword: string;
+  colorInfo?: string;
+  materialInfo?: string;
+  matchReason?: string;
+  priceRange?: string;
+}
+
+export interface ColorPalette {
+  primary: string;
+  secondary: string;
+  accent: string;
+  harmony: string;
 }
 
 export interface VisionRecommendationResult {
   summary: string;
   styleTip: string;
+  overallMood: string;
+  colorPalette: ColorPalette;
+  coordinationReason: string;
   items: RecommendedProductItem[];
+}
+
+export interface GarmentBoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface DetectedGarmentItem {
+  category: string;
+  position: string;
+  color: string;
+  style: string;
+  boundingBox: GarmentBoundingBox;
+}
+
+export interface GarmentDetectionResult {
+  items: DetectedGarmentItem[];
 }
 
 export interface ShoppingProduct {
@@ -51,4 +87,11 @@ export interface ShoppingProduct {
   lprice: string;
   mallName: string;
   productLink: string;
+}
+
+export interface TryOnItemParam {
+  category: string;
+  title: string;
+  description: string;
+  searchKeyword: string;
 }

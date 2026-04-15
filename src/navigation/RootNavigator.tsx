@@ -5,8 +5,14 @@ import { LoginScreen } from "../screens/LoginScreen";
 import { SignUpScreen } from "../screens/SignUpScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { RecommendScreen } from "../screens/RecommendScreen";
+import { OutfitTouchScreen } from "../screens/OutfitTouchScreen";
 import { RecommendationHistoryScreen } from "../screens/RecommendationHistoryScreen";
+import { VirtualTryOnScreen } from "../screens/VirtualTryOnScreen";
+import { StyleResultScreen } from "../screens/StyleResultScreen";
+import { SettingsScreen } from "../screens/SettingsScreen";
+import { OutfitCalendarScreen } from "../screens/OutfitCalendarScreen";
 import { MainTabNavigator } from "./MainTabNavigator";
+import { ShoppingProduct, TryOnItemParam, VisionRecommendationResult } from "../types";
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -18,7 +24,29 @@ export type RootStackParamList = {
     wardrobeItemId: string;
     imageUrl: string;
   };
+  OutfitTouch: {
+    wardrobeItemId: string;
+    imageUrl: string;
+  };
   RecommendationHistory: undefined;
+  Settings: undefined;
+  OutfitCalendar: undefined;
+  StyleResult: {
+    result: VisionRecommendationResult;
+    products: Record<string, ShoppingProduct[]>;
+    wardrobeImageUrl: string;
+    occasion: string;
+    weather: string;
+    desiredStyle?: string;
+    budget?: string;
+    extraRequest?: string;
+    profileText?: string;
+  };
+  VirtualTryOn: {
+    item: TryOnItemParam;
+    initialProduct: ShoppingProduct | null;
+    wardrobeImageUrl?: string;
+  };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -42,9 +70,34 @@ export function RootNavigator(): React.JSX.Element {
       <Stack.Screen name="MainTabs" component={MainTabNavigator} options={{ headerShown: false }} />
       <Stack.Screen name="Recommend" component={RecommendScreen} options={{ title: "AI 추천" }} />
       <Stack.Screen
+        name="OutfitTouch"
+        component={OutfitTouchScreen}
+        options={{ title: "옷 터치 추천" }}
+      />
+      <Stack.Screen
         name="RecommendationHistory"
         component={RecommendationHistoryScreen}
         options={{ title: "추천 히스토리" }}
+      />
+      <Stack.Screen
+        name="StyleResult"
+        component={StyleResultScreen}
+        options={{ title: "AI 코디 결과" }}
+      />
+      <Stack.Screen
+        name="VirtualTryOn"
+        component={VirtualTryOnScreen}
+        options={{ title: "가상 착용해보기" }}
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ title: "설정" }}
+      />
+      <Stack.Screen
+        name="OutfitCalendar"
+        component={OutfitCalendarScreen}
+        options={{ title: "코디 캘린더" }}
       />
     </Stack.Navigator>
   );

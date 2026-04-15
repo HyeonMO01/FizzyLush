@@ -1,95 +1,328 @@
-import React, { useEffect, useState } from "react";
-import { FlatList, Image, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../hooks/useAuth";
-import { getRecommendationHistory } from "../services/recommendationService";
+import {
+  deleteRecommendationHistory,
+  getRecommendationHistory,
+  parseRecommendationPayload,
+} from "../services/recommendationService";
 import { RecommendationHistory } from "../types";
-import { colors, spacing } from "../theme";
+import { colors, radius, spacing } from "../theme";
 
 export function RecommendationHistoryScreen(): React.JSX.Element {
   const { user } = useAuth();
-  const [list, setList] = useState<RecommendationHistory[]>([]);
-  const [loading, setLoading] = useState(false);
+  const navigation = useNavigation();
 
-  useEffect(() => {
-    const load = async () => {
-      if (!user) return;
-      setLoading(true);
-      try {
-        const data = await getRecommendationHistory(user.uid);
-        setList(data);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+  const [list, setList] = useState<RecommendationHistory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const loadHistory = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const data = await getRecommendationHistory(user.uid);
+      setList(data);
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadHistory();
+      return () => {
+        setSelectMode(false);
+        setSelectedIds(new Set());
+      };
+    }, [loadHistory]),
+  );
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === list.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(list.map((i) => i.id)));
+    }
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    Alert.alert(
+      "히스토리 삭제",
+      `${selectedIds.size}개의 기록을 삭제할까요?`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            if (!user) return;
+            try {
+              const promises = [...selectedIds].map((id) =>
+                deleteRecommendationHistory(user.uid, id),
+              );
+              await Promise.all(promises);
+              setList((prev) => prev.filter((h) => !selectedIds.has(h.id)));
+              exitSelectMode();
+            } catch {
+              Alert.alert("오류", "일부 삭제에 실패했습니다.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () =>
+        list.length > 0 ? (
+          selectMode ? (
+            <View style={styles.headerActions}>
+              <Pressable onPress={selectAll} hitSlop={8}>
+                <Text style={styles.headerActionText}>
+                  {selectedIds.size === list.length ? "전체 해제" : "전체 선택"}
+                </Text>
+              </Pressable>
+              <Pressable onPress={exitSelectMode} hitSlop={8}>
+                <Text style={styles.headerCancelText}>취소</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable onPress={() => setSelectMode(true)} hitSlop={8}>
+              <Text style={styles.headerActionText}>선택</Text>
+            </Pressable>
+          )
+        ) : null,
+    });
+  }, [navigation, list.length, selectMode, selectedIds.size]);
+
+  const formatDate = (ts: unknown) => {
+    if (!ts) return "";
+    const millis = typeof ts === "number" ? ts : typeof ts === "object" && ts !== null && "toMillis" in ts ? (ts as { toMillis: () => number }).toMillis() : Number(ts);
+    const d = new Date(millis);
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  const renderItem = ({ item }: { item: RecommendationHistory }) => {
+    const rec = parseRecommendationPayload(item.recommendation);
+    const isSelected = selectedIds.has(item.id);
+    const categories = rec?.items?.map((i) => i.category).filter(Boolean) ?? [];
+
+    return (
+      <Pressable
+        style={[styles.card, isSelected && styles.cardSelected]}
+        onPress={() => {
+          if (selectMode) toggleSelect(item.id);
+        }}
+        onLongPress={() => {
+          if (!selectMode) {
+            setSelectMode(true);
+            setSelectedIds(new Set([item.id]));
+          }
+        }}
+      >
+        {selectMode && (
+          <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
+            {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+          </View>
+        )}
+
+        <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
+
+        <View style={styles.cardContent}>
+          <View style={styles.cardTopRow}>
+            <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>
+            {item.occasion && (
+              <View style={styles.tagChip}>
+                <Text style={styles.tagText}>{item.occasion}</Text>
+              </View>
+            )}
+            {item.weather && (
+              <View style={styles.tagChip}>
+                <Text style={styles.tagText}>{item.weather}</Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.cardSummary} numberOfLines={2}>
+            {rec?.summary || "코디 추천 결과"}
+          </Text>
+
+          {categories.length > 0 && (
+            <Text style={styles.cardCategories} numberOfLines={1}>
+              {categories.join(" · ")}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centerWrap}>
+        <ActivityIndicator size="large" color={colors.zinc900} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <FlatList
         data={list}
         keyExtractor={(item) => item.id}
-        refreshing={loading}
-        onRefresh={async () => {
-          if (!user) return;
-          const data = await getRecommendationHistory(user.uid);
-          setList(data);
-        }}
-        contentContainerStyle={styles.content}
-        ListEmptyComponent={<Text style={styles.empty}>아직 추천 히스토리가 없습니다.</Text>}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Image source={{ uri: item.imageUrl }} style={styles.image} />
-            <View style={styles.textWrap}>
-              <Text style={styles.meta}>스타일: {item.desiredStyle || "-"}</Text>
-              <Text style={styles.meta}>상황: {item.occasion || "-"}</Text>
-              <Text style={styles.meta}>날씨: {item.weather || "-"}</Text>
-              <Text style={styles.meta}>예산: {item.budget || "-"}</Text>
-              <Text style={styles.meta}>
-                피드백: {item.feedback === "like" ? "좋아요" : item.feedback === "dislike" ? "별로" : "-"}
-              </Text>
-            </View>
+        renderItem={renderItem}
+        contentContainerStyle={[
+          styles.listContent,
+          list.length === 0 && { flex: 1 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            <Ionicons name="time-outline" size={40} color={colors.zinc200} />
+            <Text style={styles.emptyTitle}>추천 기록이 없습니다</Text>
+            <Text style={styles.emptySub}>AI 코디 추천을 받아보세요</Text>
           </View>
-        )}
+        }
       />
+
+      {selectMode && selectedIds.size > 0 && (
+        <View style={styles.bottomBar}>
+          <Pressable style={styles.deleteBtn} onPress={handleBulkDelete}>
+            <Ionicons name="trash-outline" size={18} color="#fff" />
+            <Text style={styles.deleteBtnText}>
+              {selectedIds.size}개 삭제
+            </Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  centerWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+
+  headerActions: { flexDirection: "row", gap: 16 },
+  headerActionText: { fontSize: 14, fontWeight: "600", color: colors.zinc900 },
+  headerCancelText: { fontSize: 14, fontWeight: "500", color: colors.zinc400 },
+
+  listContent: { padding: 20, paddingBottom: 100 },
+
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.sm,
     flexDirection: "row",
-    gap: spacing.sm,
+    alignItems: "center",
+    backgroundColor: colors.zinc50,
+    borderRadius: radius.md,
+    padding: 12,
+    marginBottom: 10,
+    gap: 12,
   },
-  image: {
-    width: 84,
-    height: 84,
-    borderRadius: 8,
+  cardSelected: {
+    backgroundColor: "#EEF2FF",
+    borderWidth: 1.5,
+    borderColor: colors.zinc900,
   },
-  textWrap: {
-    flex: 1,
-    gap: 2,
+
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.zinc200,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  meta: {
-    color: colors.text,
+  checkboxActive: {
+    backgroundColor: colors.zinc900,
+    borderColor: colors.zinc900,
+  },
+
+  cardImage: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.sm,
+    backgroundColor: colors.zinc100,
+  },
+  cardContent: { flex: 1, gap: 4 },
+  cardTopRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  cardDate: { fontSize: 11, color: colors.zinc400, fontWeight: "500" },
+  tagChip: {
+    backgroundColor: colors.zinc100,
+    borderRadius: radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  tagText: { fontSize: 10, color: colors.zinc500, fontWeight: "500" },
+
+  cardSummary: {
     fontSize: 13,
+    fontWeight: "600",
+    color: colors.zinc900,
+    lineHeight: 18,
   },
-  empty: {
-    color: colors.subText,
-    textAlign: "center",
-    marginTop: 60,
+  cardCategories: { fontSize: 11, color: colors.zinc400 },
+
+  emptyWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
+  emptyTitle: { fontSize: 16, fontWeight: "600", color: colors.zinc900 },
+  emptySub: { fontSize: 13, color: colors.zinc400 },
+
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 36,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.zinc100,
+  },
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#EF4444",
+    borderRadius: radius.md,
+    paddingVertical: 14,
+  },
+  deleteBtnText: { fontSize: 15, fontWeight: "700", color: "#fff" },
 });

@@ -1,6 +1,6 @@
 import React from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { colors } from "../theme";
+import { colors, radius, shadow } from "../theme";
 
 interface LoadingOverlayProps {
   visible: boolean;
@@ -18,7 +18,9 @@ export function LoadingOverlay({
   return (
     <View style={styles.container}>
       <View style={styles.box}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <View style={styles.spinnerWrap}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
         <Text style={styles.text}>{message}</Text>
       </View>
     </View>
@@ -32,22 +34,35 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.3)",
+    backgroundColor: colors.overlay,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 99,
   },
   box: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingVertical: 18,
-    paddingHorizontal: 24,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingVertical: 28,
+    paddingHorizontal: 32,
     alignItems: "center",
-    gap: 10,
+    gap: 14,
+    minWidth: 180,
+    ...shadow.md,
+  },
+  spinnerWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
   },
   text: {
     color: colors.text,
     fontSize: 14,
     fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 21,
+    maxWidth: 200,
   },
 });

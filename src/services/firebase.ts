@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth, initializeAuth, type Auth } from "firebase/auth";
+import { getAuth, getReactNativePersistence, initializeAuth, type Auth } from "firebase/auth";
+import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -16,9 +17,9 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 const authInstance = (() => {
   try {
-    // RN persistence helper export is not available in this firebase build,
-    // so initializeAuth first and fall back to getAuth if already initialized.
-    return initializeAuth(app);
+    return initializeAuth(app, {
+      persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+    });
   } catch {
     return getAuth(app);
   }

@@ -2,11 +2,28 @@ import { FirebaseError } from "firebase/app";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { storage } from "./firebase";
 
+/** 가상 착용용 모델 사진을 Firebase Storage에 임시 업로드하고 공개 URL 반환 */
+export async function uploadModelPhoto(uid: string, uri: string): Promise<string> {
+  try {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const path = `users/${uid}/tryon_model/${Date.now()}.jpg`;
+    const imageRef = ref(storage, path);
+    await uploadBytes(imageRef, blob);
+    return getDownloadURL(imageRef);
+  } catch (error) {
+    if (error instanceof FirebaseError) {
+      throw new Error(`모델 사진 업로드 오류: ${error.code}`);
+    }
+    throw new Error("모델 사진 업로드 중 오류가 발생했습니다.");
+  }
+}
+
 export async function uploadWardrobeImage(uid: string, uri: string): Promise<string> {
   try {
     const response = await fetch(uri);
     const blob = await response.blob();
-    const path = `users/${uid}/wardrobe/${Date.now()}.jpg`;
+    const path = `users/${uid}/wardrobe/${Date.now()}.png`;
     const imageRef = ref(storage, path);
     await uploadBytes(imageRef, blob);
     return getDownloadURL(imageRef);

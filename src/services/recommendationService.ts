@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   orderBy,
@@ -9,7 +10,54 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { RecommendationHistory } from "../types";
+import { RecommendationFeedback, RecommendationHistory, VisionRecommendationResult } from "../types";
+
+function isValidRecommendationResult(value: unknown): value is VisionRecommendationResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const row = value as Record<string, unknown>;
+  if (typeof row.summary !== "string" || typeof row.styleTip !== "string" || !Array.isArray(row.items)) {
+    return false;
+  }
+  return row.items.every((item) => {
+    if (!item || typeof item !== "object") {
+      return false;
+    }
+    const i = item as Record<string, unknown>;
+    return (
+      typeof i.category === "string" &&
+      typeof i.title === "string" &&
+      typeof i.description === "string" &&
+      typeof i.searchKeyword === "string"
+    );
+  });
+}
+
+export function ensureFullResult(parsed: VisionRecommendationResult): VisionRecommendationResult {
+  return {
+    ...parsed,
+    overallMood: parsed.overallMood || "",
+    colorPalette: parsed.colorPalette || { primary: "", secondary: "", accent: "", harmony: "" },
+    coordinationReason: parsed.coordinationReason || "",
+    items: parsed.items.map((item) => ({
+      ...item,
+      colorInfo: item.colorInfo || "",
+      materialInfo: item.materialInfo || "",
+      matchReason: item.matchReason || "",
+      priceRange: item.priceRange || "",
+    })),
+  };
+}
+
+export function parseRecommendationPayload(payload: string): VisionRecommendationResult | null {
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    return isValidRecommendationResult(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function saveRecommendationHistory(params: {
   uid: string;
@@ -39,10 +87,15 @@ export async function saveRecommendationHistory(params: {
 export async function updateRecommendationFeedback(params: {
   uid: string;
   historyId: string;
-  feedback: "like" | "dislike";
+  feedback: RecommendationFeedback;
 }): Promise<void> {
   const historyRef = doc(db, "users", params.uid, "recommendationHistory", params.historyId);
   await updateDoc(historyRef, { feedback: params.feedback });
+}
+
+export async function deleteRecommendationHistory(uid: string, historyId: string): Promise<void> {
+  const docRef = doc(db, "users", uid, "recommendationHistory", historyId);
+  await deleteDoc(docRef);
 }
 
 export async function getRecommendationHistory(uid: string): Promise<RecommendationHistory[]> {
