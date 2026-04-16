@@ -19,12 +19,14 @@ import { useAuth } from "../hooks/useAuth";
 import { getUserProfile } from "../services/userProfileService";
 import { generateOutfitVisualization, requestVisionRecommendation } from "../services/openai";
 import { saveRecommendationHistory } from "../services/recommendationService";
-import { searchNaverShoppingProduct } from "../services/naverShoppingService";
+import { fetchNaverShoppingProduct } from "../services/naverShoppingService";
 import { colors, radius, shadow, spacing } from "../theme";
 import { LoadingOverlay } from "../components/LoadingOverlay";
 import { ShoppingProduct, VisionRecommendationResult } from "../types";
 import { TextField } from "../components/TextField";
 import { reportError } from "../services/monitoringService";
+import { FEATURE_VIRTUAL_TRY_ON_ENABLED } from "../constants/features";
+import { VirtualTryOnRowPlaceholder } from "../components/VirtualTryOnDisabled";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Recommend">;
 
@@ -62,6 +64,7 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [historyId, setHistoryId] = useState("");
   const [productMap, setProductMap] = useState<Record<string, ShoppingProduct | null>>({});
+  const [shopFetchError, setShopFetchError] = useState<string | null>(null);
   const [outfitImageUrl, setOutfitImageUrl] = useState<string | null>(null);
   const [imageGenLoading, setImageGenLoading] = useState(false);
 
@@ -79,6 +82,7 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
     if (loading) return;
     setLoading(true);
     setOutfitImageUrl(null);
+    setShopFetchError(null);
     try {
       const profile = await getUserProfile(user.uid);
       const profileText = `키 ${profile?.height ?? "-"}cm, 몸무게 ${profile?.weight ?? "-"}kg, 체형 ${
@@ -88,12 +92,18 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
         imageUrl, profileText, desiredStyle, occasion, weather, budget,
       });
       setResult(recommendationResult);
-      const products = await Promise.all(
-        recommendationResult.items.map((item) => searchNaverShoppingProduct(item.searchKeyword)),
-      );
       const nextMap: Record<string, ShoppingProduct | null> = {};
-      products.forEach((product, idx) => { nextMap[String(idx)] = product; });
+      let shopErr: string | null = null;
+      for (let idx = 0; idx < recommendationResult.items.length; idx++) {
+        const item = recommendationResult.items[idx];
+        const fetched = await fetchNaverShoppingProduct(item.searchKeyword);
+        nextMap[String(idx)] = fetched.product;
+        if (fetched.error && !shopErr) {
+          shopErr = fetched.error;
+        }
+      }
       setProductMap(nextMap);
+      setShopFetchError(shopErr);
       const savedHistoryId = await saveRecommendationHistory({
         uid: user.uid, wardrobeItemId, imageUrl,
         recommendation: JSON.stringify(recommendationResult),
@@ -288,6 +298,14 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
               <Ionicons name="bulb-outline" size={13} color={colors.warning} />
               <Text style={styles.tipText}>{result.styleTip}</Text>
             </View>
+            {shopFetchError ? (
+              <View style={styles.shopErrBox}>
+                <Ionicons name="warning-outline" size={14} color="#B45309" />
+                <Text style={styles.shopErrText}>
+                  쇼핑 API: {shopFetchError}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {/* 아이템 카드 목록 */}
@@ -334,23 +352,27 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
                       {product?.productLink ? "네이버 구매" : "네이버 검색"}
                     </Text>
                   </Pressable>
-                  <Pressable
-                    style={styles.tryOnBtn}
-                    onPress={() =>
-                      navigation.navigate("VirtualTryOn", {
-                        item: {
-                          category: item.category,
-                          title: item.title,
-                          description: item.description,
-                          searchKeyword: item.searchKeyword,
-                        },
-                        initialProduct: product ?? null,
-                      })
-                    }
-                  >
-                    <Ionicons name="body-outline" size={13} color="#fff" />
-                    <Text style={styles.tryOnBtnText}>착용해보기</Text>
-                  </Pressable>
+                  {FEATURE_VIRTUAL_TRY_ON_ENABLED ? (
+                    <Pressable
+                      style={styles.tryOnBtn}
+                      onPress={() =>
+                        navigation.navigate("VirtualTryOn", {
+                          item: {
+                            category: item.category,
+                            title: item.title,
+                            description: item.description,
+                            searchKeyword: item.searchKeyword,
+                          },
+                          initialProduct: product ?? null,
+                        })
+                      }
+                    >
+                      <Ionicons name="body-outline" size={13} color="#fff" />
+                      <Text style={styles.tryOnBtnText}>착용해보기</Text>
+                    </Pressable>
+                  ) : (
+                    <VirtualTryOnRowPlaceholder variant="muted" />
+                  )}
                 </View>
               </View>
             );
@@ -563,6 +585,17 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   tipText: { flex: 1, fontSize: 13, color: "#92400E", lineHeight: 19 },
+  shopErrBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FEF3C7",
+    borderRadius: radius.sm,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+  },
+  shopErrText: { flex: 1, fontSize: 12, color: "#78350F", lineHeight: 18 },
 
   /* 아이템 */
   itemsTitle: { fontSize: 15, fontWeight: "800", color: colors.text },

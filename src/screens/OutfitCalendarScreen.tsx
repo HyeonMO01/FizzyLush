@@ -23,7 +23,7 @@ import {
 import { db } from "../services/firebase";
 import { useAuth } from "../hooks/useAuth";
 import { useWardrobeList } from "../hooks/useWardrobeList";
-import { colors, radius, spacing } from "../theme";
+import { colors, radius } from "../theme";
 import { WardrobeItem } from "../types";
 
 interface OutfitLog {

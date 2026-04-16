@@ -18,7 +18,16 @@ import { RootStackParamList } from "../navigation/RootNavigator";
 import { colors, radius, spacing } from "../theme";
 import { ShoppingProduct, VisionRecommendationResult } from "../types";
 import { requestVisionRecommendation } from "../services/openai";
-import { searchNaverShoppingProducts } from "../services/naverShoppingService";
+import {
+  fetchNaverShoppingProducts,
+  NAVER_SHOP_FETCH_CONCURRENCY,
+} from "../services/naverShoppingService";
+import { runWithConcurrency } from "../utils/concurrency";
+import { FEATURE_VIRTUAL_TRY_ON_ENABLED } from "../constants/features";
+import {
+  VirtualTryOnBottomPlaceholder,
+  VirtualTryOnRowPlaceholder,
+} from "../components/VirtualTryOnDisabled";
 
 type Props = NativeStackScreenProps<RootStackParamList, "StyleResult">;
 
@@ -49,6 +58,7 @@ export function StyleResultScreen({ route, navigation }: Props): React.JSX.Eleme
 
   const [result, setResult] = useState<VisionRecommendationResult>(route.params.result);
   const [products, setProducts] = useState<Record<string, ShoppingProduct[]>>(route.params.products);
+  const [shoppingError, setShoppingError] = useState<string | undefined>(route.params.shoppingError);
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [regenerating, setRegenerating] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
@@ -105,15 +115,26 @@ export function StyleResultScreen({ route, navigation }: Props): React.JSX.Eleme
         extraRequest,
       });
       const budgetStr = budget || "제한 없음";
-      const newProducts: Record<string, ShoppingProduct[]> = {};
-      await Promise.all(
-        newResult.items.map(async (item) => {
-          const found = await searchNaverShoppingProducts(item.searchKeyword, 8, { budget: budgetStr });
-          newProducts[item.category] = found;
-        }),
+      const shopResults = await runWithConcurrency(
+        newResult.items,
+        NAVER_SHOP_FETCH_CONCURRENCY,
+        async (item) =>
+          fetchNaverShoppingProducts(item.searchKeyword, 8, { budget: budgetStr }).then((r) => ({
+            category: item.category,
+            ...r,
+          })),
       );
+      const newProducts: Record<string, ShoppingProduct[]> = {};
+      let shopErr: string | undefined;
+      for (const r of shopResults) {
+        newProducts[r.category] = r.products;
+        if (r.error && !shopErr) {
+          shopErr = r.error;
+        }
+      }
       setResult(newResult);
       setProducts(newProducts);
+      setShoppingError(shopErr);
       setLiked(new Set());
       setExpandedItems(new Set());
     } catch (e) {
@@ -157,6 +178,19 @@ export function StyleResultScreen({ route, navigation }: Props): React.JSX.Eleme
       <View style={styles.summaryCard}>
         <Text style={styles.summaryText}>{result.summary}</Text>
       </View>
+
+      {shoppingError ? (
+        <View style={styles.shopErrorBanner}>
+          <Ionicons name="warning-outline" size={18} color="#B45309" />
+          <View style={styles.shopErrorTextWrap}>
+            <Text style={styles.shopErrorTitle}>쇼핑 상품을 불러오지 못했습니다</Text>
+            <Text style={styles.shopErrorBody}>{shoppingError}</Text>
+            <Text style={styles.shopErrorHint}>
+              프록시 서버가 켜져 있는지, .env의 EXPO_PUBLIC_API_BASE_URL(휴대폰에서는 PC IP 주소)과 서버의 네이버 쇼핑 API 키를 확인해주세요.
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       {/* Color Palette */}
       {palette && (palette.primary || palette.secondary || palette.accent) && (
@@ -335,24 +369,28 @@ export function StyleResultScreen({ route, navigation }: Props): React.JSX.Eleme
                     <Ionicons name="open-outline" size={14} color={colors.zinc600} />
                     <Text style={styles.buyBtnText}>구매하기</Text>
                   </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [styles.tryOnBtn, pressed && { transform: [{ scale: 0.98 }] }]}
-                    onPress={() =>
-                      navigation.navigate("VirtualTryOn", {
-                        item: {
-                          category: item.category,
-                          title: item.title,
-                          description: item.description,
-                          searchKeyword: item.searchKeyword,
-                        },
-                        initialProduct: firstProduct ?? null,
-                        wardrobeImageUrl,
-                      })
-                    }
-                  >
-                    <Ionicons name="sparkles" size={14} color="#fff" />
-                    <Text style={styles.tryOnBtnText}>착용해보기</Text>
-                  </Pressable>
+                  {FEATURE_VIRTUAL_TRY_ON_ENABLED ? (
+                    <Pressable
+                      style={({ pressed }) => [styles.tryOnBtn, pressed && { transform: [{ scale: 0.98 }] }]}
+                      onPress={() =>
+                        navigation.navigate("VirtualTryOn", {
+                          item: {
+                            category: item.category,
+                            title: item.title,
+                            description: item.description,
+                            searchKeyword: item.searchKeyword,
+                          },
+                          initialProduct: firstProduct ?? null,
+                          wardrobeImageUrl,
+                        })
+                      }
+                    >
+                      <Ionicons name="sparkles" size={14} color="#fff" />
+                      <Text style={styles.tryOnBtnText}>착용해보기</Text>
+                    </Pressable>
+                  ) : (
+                    <VirtualTryOnRowPlaceholder variant="dark" expand />
+                  )}
                 </View>
               </View>
             )}
@@ -368,29 +406,32 @@ export function StyleResultScreen({ route, navigation }: Props): React.JSX.Eleme
         );
       })}
 
-      {/* Full outfit try-on CTA */}
-      <Pressable
-        style={({ pressed }) => [styles.fullTryOnBtn, pressed && { transform: [{ scale: 0.98 }] }]}
-        onPress={() => {
-          const firstItem = result.items[0];
-          const firstProduct = (products[firstItem?.category] ?? [])[0];
-          if (firstItem) {
-            navigation.navigate("VirtualTryOn", {
-              item: {
-                category: firstItem.category,
-                title: `${result.summary} 전체 코디`,
-                description: result.styleTip,
-                searchKeyword: firstItem.searchKeyword,
-              },
-              initialProduct: firstProduct ?? null,
-              wardrobeImageUrl,
-            });
-          }
-        }}
-      >
-        <Ionicons name="body-outline" size={18} color="#fff" />
-        <Text style={styles.fullTryOnText}>전체 코디 가상 착용해보기</Text>
-      </Pressable>
+      {FEATURE_VIRTUAL_TRY_ON_ENABLED ? (
+        <Pressable
+          style={({ pressed }) => [styles.fullTryOnBtn, pressed && { transform: [{ scale: 0.98 }] }]}
+          onPress={() => {
+            const firstItem = result.items[0];
+            const firstProduct = (products[firstItem?.category] ?? [])[0];
+            if (firstItem) {
+              navigation.navigate("VirtualTryOn", {
+                item: {
+                  category: firstItem.category,
+                  title: `${result.summary} 전체 코디`,
+                  description: result.styleTip,
+                  searchKeyword: firstItem.searchKeyword,
+                },
+                initialProduct: firstProduct ?? null,
+                wardrobeImageUrl,
+              });
+            }
+          }}
+        >
+          <Ionicons name="body-outline" size={18} color="#fff" />
+          <Text style={styles.fullTryOnText}>전체 코디 가상 착용해보기</Text>
+        </Pressable>
+      ) : (
+        <VirtualTryOnBottomPlaceholder />
+      )}
 
       <View style={{ height: 40 }} />
     </ScrollView>
@@ -436,6 +477,23 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   summaryText: { fontSize: 14, fontWeight: "600", color: colors.zinc900, lineHeight: 21 },
+
+  shopErrorBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: "#FEF3C7",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+  },
+  shopErrorTextWrap: { flex: 1, gap: 4 },
+  shopErrorTitle: { fontSize: 13, fontWeight: "700", color: "#92400E" },
+  shopErrorBody: { fontSize: 12, color: "#78350F", lineHeight: 18 },
+  shopErrorHint: { fontSize: 11, color: "#A16207", lineHeight: 16, marginTop: 2 },
 
   /* Color Palette */
   paletteCard: {

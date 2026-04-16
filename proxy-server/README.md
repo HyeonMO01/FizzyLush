@@ -28,8 +28,19 @@ EXPO_PUBLIC_PROXY_TOKEN=<YOUR_PROXY_TOKEN>
 
 ## 4) 엔드포인트
 
+- `GET /health` — 로드밸런서·업타임용 (CORS/토큰 없음)
 - `POST /api/openai/chat-completions`
 - `GET /api/naver/shop-search?query=...&display=5&sort=sim`
+- 기타: `server.mjs` 참고
+
+## 4.1) Docker
+
+```bash
+docker build -t fizzylush-proxy -f proxy-server/Dockerfile proxy-server
+docker run -p 8787:8787 --env-file .env fizzylush-proxy
+```
+
+배포 절차는 [DEPLOY.md](./DEPLOY.md) 참고.
 
 ## 5) 참고
 

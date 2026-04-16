@@ -18,7 +18,11 @@ import { useAuth } from "../hooks/useAuth";
 import { useWardrobeList } from "../hooks/useWardrobeList";
 import { getUserProfile } from "../services/userProfileService";
 import { requestVisionRecommendation } from "../services/openai";
-import { searchNaverShoppingProducts } from "../services/naverShoppingService";
+import {
+  fetchNaverShoppingProducts,
+  NAVER_SHOP_FETCH_CONCURRENCY,
+} from "../services/naverShoppingService";
+import { runWithConcurrency } from "../utils/concurrency";
 import { colors, radius, spacing } from "../theme";
 import { ShoppingProduct, WardrobeItem } from "../types";
 import { LoadingOverlay } from "../components/LoadingOverlay";
@@ -82,13 +86,23 @@ export function StyleRecommendScreen(): React.JSX.Element {
         recentFeedback: recentFeedback.length > 0 ? recentFeedback : undefined,
       });
 
-      const products: Record<string, ShoppingProduct[]> = {};
-      await Promise.all(
-        result.items.map(async (item) => {
-          const found = await searchNaverShoppingProducts(item.searchKeyword, 8, { budget: budgetStr });
-          products[item.category] = found;
-        }),
+      const shopResults = await runWithConcurrency(
+        result.items,
+        NAVER_SHOP_FETCH_CONCURRENCY,
+        async (item) =>
+          fetchNaverShoppingProducts(item.searchKeyword, 8, { budget: budgetStr }).then((r) => ({
+            category: item.category,
+            ...r,
+          })),
       );
+      const products: Record<string, ShoppingProduct[]> = {};
+      let shoppingError: string | undefined;
+      for (const r of shopResults) {
+        products[r.category] = r.products;
+        if (r.error && !shoppingError) {
+          shoppingError = r.error;
+        }
+      }
 
       void saveRecommendationHistory({
         uid: user.uid,
@@ -104,6 +118,7 @@ export function StyleRecommendScreen(): React.JSX.Element {
       navigation.navigate("StyleResult", {
         result,
         products,
+        shoppingError,
         wardrobeImageUrl: selectedItem.imageUrl,
         occasion: situation,
         weather: weatherValue,

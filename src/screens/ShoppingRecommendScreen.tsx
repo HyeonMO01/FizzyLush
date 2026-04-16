@@ -15,9 +15,9 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../hooks/useAuth";
 import { getUserProfile } from "../services/userProfileService";
-import { searchNaverShoppingProducts } from "../services/naverShoppingService";
+import { fetchNaverShoppingProducts } from "../services/naverShoppingService";
 import { useWardrobeList } from "../hooks/useWardrobeList";
-import { colors, radius, spacing } from "../theme";
+import { colors, radius } from "../theme";
 import { ShoppingProduct } from "../types";
 
 interface RecommendCategory {
@@ -66,15 +66,12 @@ export function ShoppingRecommendScreen(): React.JSX.Element {
   const fetchProducts = async (query: string) => {
     setLoading(true);
     setError(null);
-    try {
-      const results = await searchNaverShoppingProducts(query, 20);
-      setProducts(results);
-    } catch {
-      setProducts([]);
-      setError("상품을 불러오지 못했습니다");
-    } finally {
-      setLoading(false);
+    const { products, error } = await fetchNaverShoppingProducts(query, 20);
+    setProducts(products);
+    if (error) {
+      setError(error);
     }
+    setLoading(false);
   };
 
   const handleCategoryPress = (cat: RecommendCategory) => {

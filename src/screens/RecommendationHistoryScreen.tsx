@@ -18,7 +18,7 @@ import {
   parseRecommendationPayload,
 } from "../services/recommendationService";
 import { RecommendationHistory } from "../types";
-import { colors, radius, spacing } from "../theme";
+import { colors, radius } from "../theme";
 
 export function RecommendationHistoryScreen(): React.JSX.Element {
   const { user } = useAuth();

@@ -16,6 +16,7 @@ const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
   .map((v) => v.trim())
   .filter(Boolean);
 const allowedSortValues = new Set(["sim", "date", "asc", "dsc"]);
+const proxyVersion = process.env.PROXY_VERSION || "1";
 
 function buildCorsHeaders(origin) {
   const allowAny = allowedOrigins.length === 0;
@@ -75,6 +76,26 @@ function allowRequest(ip) {
 }
 
 const server = createServer(async (req, res) => {
+  const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+
+  /* 로드밸런서·업타임 체크 — CORS/토큰/레이트리밋 없음 */
+  if (req.method === "GET" && requestUrl.pathname === "/health") {
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "no-store",
+    });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        service: "fizzylush-proxy",
+        version: proxyVersion,
+        ts: new Date().toISOString(),
+      }),
+    );
+    return;
+  }
+
   const origin = typeof req.headers.origin === "string" ? req.headers.origin : "";
   const cors = buildCorsHeaders(origin);
   if (req.method === "OPTIONS") {
@@ -99,8 +120,6 @@ const server = createServer(async (req, res) => {
     sendJson(res, 429, { error: "Too many requests" }, cors.headers);
     return;
   }
-
-  const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
   try {
     if (req.method === "POST" && requestUrl.pathname === "/api/openai/chat-completions") {

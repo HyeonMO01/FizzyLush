@@ -39,16 +39,25 @@ export async function proxyPost<T>(
   return (await response.json()) as T;
 }
 
-export async function proxyGet<T>(path: string): Promise<T> {
+export type ProxyGetOptions = {
+  timeoutMs?: number;
+  retryCount?: number;
+  retryDelayMs?: number;
+};
+
+export async function proxyGet<T>(path: string, fetchOptions?: ProxyGetOptions): Promise<T> {
   const baseUrl = getProxyBaseUrl();
   const headers: Record<string, string> = {};
   if (PROXY_TOKEN?.trim()) {
     headers["x-proxy-token"] = PROXY_TOKEN;
   }
+  const timeoutMs = fetchOptions?.timeoutMs ?? 18000;
+  const retryCount = fetchOptions?.retryCount ?? 1;
+  const retryDelayMs = fetchOptions?.retryDelayMs ?? 800;
   const response = await fetchWithRetry(
     `${baseUrl}${path}`,
     { method: "GET", headers },
-    { timeoutMs: 12000, retryCount: 1, retryDelayMs: 600 },
+    { timeoutMs, retryCount, retryDelayMs },
   );
   if (!response.ok) {
     const text = await response.text();

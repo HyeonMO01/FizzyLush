@@ -18,6 +18,17 @@ function isRetryableStatus(status: number): boolean {
   return status >= 500 || status === 429;
 }
 
+/** 타임아웃(Abort)·일반 네트워크 실패 메시지 정리 */
+export function normalizeFetchError(error: unknown): Error {
+  if (error instanceof Error) {
+    if (error.name === "AbortError" || /aborted/i.test(error.message)) {
+      return new Error("요청 시간이 초과되었습니다. 네트워크 상태를 확인해주세요.");
+    }
+    return error;
+  }
+  return new Error(String(error));
+}
+
 export async function fetchWithRetry(
   input: RequestInfo | URL,
   init: RequestInit,
@@ -43,7 +54,7 @@ export async function fetchWithRetry(
     } catch (error) {
       clearTimeout(timeoutId);
       if (attempt === retryCount) {
-        throw error;
+        throw normalizeFetchError(error);
       }
     }
 

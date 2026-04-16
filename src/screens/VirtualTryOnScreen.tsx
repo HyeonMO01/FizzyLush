@@ -4,7 +4,6 @@ import {
   Alert,
   Image,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,6 +18,7 @@ import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { File, Paths } from "expo-file-system";
 import { RootStackParamList } from "../navigation/RootNavigator";
+import { FEATURE_VIRTUAL_TRY_ON_ENABLED } from "../constants/features";
 import { useAuth } from "../hooks/useAuth";
 import { uploadModelPhoto } from "../services/storageService";
 import {
@@ -27,7 +27,7 @@ import {
   pollTryOnPrediction,
   startTryOnPrediction,
 } from "../services/replicateService";
-import { searchNaverShoppingProducts } from "../services/naverShoppingService";
+import { fetchNaverShoppingProducts } from "../services/naverShoppingService";
 import { colors, radius, shadow, spacing } from "../theme";
 import { ShoppingProduct } from "../types";
 
@@ -56,7 +56,7 @@ function CategoryBadge({ category }: { category: string }) {
   );
 }
 
-export function VirtualTryOnScreen({ route }: Props): React.JSX.Element {
+export function VirtualTryOnScreen({ route, navigation }: Props): React.JSX.Element {
   const { user } = useAuth();
   const { item, initialProduct, wardrobeImageUrl } = route.params;
 
@@ -132,14 +132,12 @@ export function VirtualTryOnScreen({ route }: Props): React.JSX.Element {
   const runSearch = async () => {
     if (!searchKeyword.trim()) return;
     setSearchLoading(true);
-    try {
-      const results = await searchNaverShoppingProducts(searchKeyword.trim(), 6);
-      setSearchResults(results);
-    } catch {
-      Alert.alert("검색 실패", "다시 시도해주세요.");
-    } finally {
-      setSearchLoading(false);
+    const { products, error } = await fetchNaverShoppingProducts(searchKeyword.trim(), 6);
+    setSearchResults(products);
+    if (error) {
+      Alert.alert("쇼핑 검색 실패", error);
     }
+    setSearchLoading(false);
   };
 
   const selectProduct = (p: ShoppingProduct) => {
@@ -288,6 +286,26 @@ export function VirtualTryOnScreen({ route }: Props): React.JSX.Element {
 
   const isGenerating = step === "uploading" || step === "generating";
   const canStart = Boolean(modelLocalUri) && Boolean(product?.image) && !isGenerating;
+
+  if (!FEATURE_VIRTUAL_TRY_ON_ENABLED) {
+    return (
+      <View style={styles.gateRoot}>
+        <View style={styles.gateInner}>
+          <Ionicons name="hourglass-outline" size={48} color={colors.zinc400} />
+          <Text style={styles.gateTitle}>가상 착용</Text>
+          <View style={styles.gatePill}>
+            <Text style={styles.gatePillText}>베타</Text>
+          </View>
+          <Text style={styles.gateBody}>
+            정식 출시 예정입니다.{"\n"}조금만 기다려 주세요.
+          </Text>
+          <Pressable style={styles.gateBtn} onPress={() => navigation.goBack()}>
+            <Text style={styles.gateBtnText}>돌아가기</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -888,4 +906,38 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
   },
   buyResultBtnText: { fontSize: 15, fontWeight: "800", color: "#fff", flex: 1, textAlign: "center" },
+
+  gateRoot: {
+    flex: 1,
+    backgroundColor: colors.background,
+    justifyContent: "center",
+    padding: spacing.lg,
+  },
+  gateInner: {
+    alignItems: "center",
+    gap: 12,
+    padding: spacing.lg,
+  },
+  gateTitle: { fontSize: 22, fontWeight: "800", color: colors.text },
+  gatePill: {
+    backgroundColor: colors.zinc200,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  gatePillText: { fontSize: 12, fontWeight: "800", color: colors.zinc600 },
+  gateBody: {
+    fontSize: 15,
+    color: colors.subText,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  gateBtn: {
+    marginTop: 8,
+    backgroundColor: colors.zinc900,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: radius.lg,
+  },
+  gateBtnText: { fontSize: 15, fontWeight: "700", color: "#fff" },
 });

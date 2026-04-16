@@ -34,6 +34,8 @@ export type RootStackParamList = {
   StyleResult: {
     result: VisionRecommendationResult;
     products: Record<string, ShoppingProduct[]>;
+    /** 네이버 쇼핑 API/프록시 호출 실패 시 메시지 */
+    shoppingError?: string;
     wardrobeImageUrl: string;
     occasion: string;
     weather: string;
@@ -87,7 +89,7 @@ export function RootNavigator(): React.JSX.Element {
       <Stack.Screen
         name="VirtualTryOn"
         component={VirtualTryOnScreen}
-        options={{ title: "가상 착용해보기" }}
+        options={{ title: "가상 착용" }}
       />
       <Stack.Screen
         name="Settings"
