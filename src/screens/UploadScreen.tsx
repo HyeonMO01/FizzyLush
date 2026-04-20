@@ -16,7 +16,7 @@ import { colors, radius, spacing } from "../theme";
 import { useAuth } from "../hooks/useAuth";
 import { uploadWardrobeImage } from "../services/storageService";
 import { addWardrobeItem } from "../services/wardrobeService";
-import { analyzeGarmentRegions } from "../services/openai";
+import { analyzeGarmentRegions, polishWardrobeSummaryLine } from "../services/openai";
 import { cropGarmentRegion } from "../utils/cropGarment";
 import { LoadingOverlay } from "../components/LoadingOverlay";
 import { normalizeImageToPng } from "../utils/normalizeImageToPng";
@@ -35,6 +35,8 @@ export function UploadScreen({ navigation }: Props): React.JSX.Element {
   const [detectedItems, setDetectedItems] = useState<DetectedGarmentItem[]>([]);
   const [croppedUri, setCroppedUri] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
+  /** 크롭 전 선택한 감지 항목 — 색·스타일로 aiSummary 보강 */
+  const [garmentMeta, setGarmentMeta] = useState<DetectedGarmentItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("처리 중...");
 
@@ -58,6 +60,7 @@ export function UploadScreen({ navigation }: Props): React.JSX.Element {
       setDetectedItems([]);
       setCroppedUri(null);
       setCategory(null);
+      setGarmentMeta(null);
       void analyzeImage(asset.uri);
     }
   };
@@ -84,6 +87,7 @@ export function UploadScreen({ navigation }: Props): React.JSX.Element {
   const handleSelectGarment = async (idx: number) => {
     if (!imageUri || !imageSize) return;
     const item = detectedItems[idx];
+    setGarmentMeta(item);
     setCategory(item.category);
     setLoading(true);
     setLoadingMessage("옷 영역을 크롭하는 중...");
@@ -100,6 +104,7 @@ export function UploadScreen({ navigation }: Props): React.JSX.Element {
   };
 
   const handleSkipCrop = () => {
+    setGarmentMeta(null);
     setCroppedUri(null);
     setStep("preview");
   };
@@ -115,7 +120,27 @@ export function UploadScreen({ navigation }: Props): React.JSX.Element {
       const pngUri = await normalizeImageToPng(finalUri);
       setLoadingMessage("옷장에 저장하는 중...");
       const imageUrl = await uploadWardrobeImage(user.uid, pngUri);
-      await addWardrobeItem({ uid: user.uid, imageUrl, category, aiSummary: "" });
+      const hintParts = garmentMeta
+        ? [garmentMeta.color, garmentMeta.style, garmentMeta.position].filter(Boolean)
+        : [];
+      let aiSummary = hintParts.length
+        ? `${category} — ${hintParts.join(" · ")}`
+        : `${category} (옷장 등록)`;
+      aiSummary = aiSummary.slice(0, 120);
+      try {
+        const polished = await polishWardrobeSummaryLine({
+          category,
+          color: garmentMeta?.color,
+          style: garmentMeta?.style,
+          position: garmentMeta?.position,
+        });
+        if (polished.replace(/\s/g, "").length >= 4) {
+          aiSummary = polished;
+        }
+      } catch {
+        /* 휴리스틱 유지 */
+      }
+      await addWardrobeItem({ uid: user.uid, imageUrl, category, aiSummary });
       resetState();
       Alert.alert("등록 완료", "옷이 옷장에 추가되었어요!");
       navigation.navigate("Home");
@@ -132,6 +157,7 @@ export function UploadScreen({ navigation }: Props): React.JSX.Element {
     setDetectedItems([]);
     setCroppedUri(null);
     setCategory(null);
+    setGarmentMeta(null);
     setStep("pick");
   };
 

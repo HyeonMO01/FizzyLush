@@ -60,6 +60,10 @@ export interface VisionRecommendationResult {
   colorPalette: ColorPalette;
   coordinationReason: string;
   items: RecommendedProductItem[];
+  /** 사용자 사진 속 ‘내 옷’만 묘사(영어) — DALL·E 등 시각화 앵커 */
+  visualAnchorEn?: string;
+  /** 같은 내용 한국어(앱 표시·검수용) */
+  visualAnchorKo?: string;
 }
 
 export interface GarmentBoundingBox {

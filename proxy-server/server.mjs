@@ -257,7 +257,7 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "Invalid image generation request: prompt required" }, cors.headers);
         return;
       }
-      const prompt = body.prompt.slice(0, 1000);
+      const prompt = body.prompt.slice(0, 3800);
       const size = ["1024x1024", "1024x1792", "1792x1024"].includes(body.size) ? body.size : "1024x1792";
       const response = await fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",

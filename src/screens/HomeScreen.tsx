@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActionSheetIOS,
+  ActivityIndicator,
   Alert,
   FlatList,
   Image,
@@ -27,6 +29,10 @@ import { FILTER_CATEGORIES, WARDROBE_CATEGORIES } from "../constants/categories"
 import { DailyOutfitSuggestion, generateDailySuggestions } from "../services/smartRecommendService";
 import { getCurrentWeather, getWeatherEmoji, getWeatherCategory, WeatherData } from "../services/weatherService";
 
+function wardrobeKeysFingerprint(items: WardrobeItem[]): string {
+  return [...items].map((i) => i.id).sort().join("|");
+}
+
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Home">,
   NativeStackScreenProps<RootStackParamList>
@@ -43,6 +49,9 @@ export function HomeScreen({ navigation }: Props): React.JSX.Element {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [dailySuggestions, setDailySuggestions] = useState<DailyOutfitSuggestion[]>([]);
   const [activeSuggestion, setActiveSuggestion] = useState(0);
+  const [dailyOutfitLoading, setDailyOutfitLoading] = useState(false);
+  const [dailyGenExhausted, setDailyGenExhausted] = useState(false);
+  const dailyGenInFlight = useRef(false);
 
   useEffect(() => {
     const load = async () => {
@@ -58,19 +67,82 @@ export function HomeScreen({ navigation }: Props): React.JSX.Element {
     void load();
   }, [user]);
 
+  /** 날짜·옷장 구성·날씨가 바뀌면 오늘의 코디를 다시 받도록 캐시 무효화 */
   useEffect(() => {
-    if (!user || items.length === 0 || dailySuggestions.length > 0) return;
+    if (!user || items.length === 0) return;
+    const fp = wardrobeKeysFingerprint(items);
+    const today = new Date().toISOString().slice(0, 10);
+    const wKey = `${weather?.temp ?? ""}|${weather?.description ?? ""}`;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [[, storedDate], [, storedFp], [, storedW]] = await AsyncStorage.multiGet([
+          ["@fizzylush/daily_outfit_date", ""],
+          ["@fizzylush/daily_outfit_fp", ""],
+          ["@fizzylush/daily_outfit_weather", ""],
+        ]);
+        if (cancelled) return;
+        if (storedDate !== today || storedFp !== fp || storedW !== wKey) {
+          setDailySuggestions([]);
+          setDailyGenExhausted(false);
+          setActiveSuggestion(0);
+          await AsyncStorage.multiSet([
+            ["@fizzylush/daily_outfit_date", today],
+            ["@fizzylush/daily_outfit_fp", fp],
+            ["@fizzylush/daily_outfit_weather", wKey],
+          ]);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, items, weather?.temp, weather?.description]);
+
+  useEffect(() => {
+    if (!user || items.length === 0 || dailySuggestions.length > 0 || dailyGenExhausted) return;
+    if (dailyGenInFlight.current) return;
+    dailyGenInFlight.current = true;
+    let cancelled = false;
+    setDailyOutfitLoading(true);
     void generateDailySuggestions({
       uid: user.uid,
       wardrobeItems: items,
       weatherDesc: weather?.description,
       temperature: weather?.temp,
-    }).then((s) => { if (s.length > 0) setDailySuggestions(s); }).catch(() => {});
-  }, [user, items.length, weather]);
+    })
+      .then((s) => {
+        if (cancelled) return;
+        if (s.length > 0) {
+          setDailySuggestions(s);
+        } else {
+          setDailyGenExhausted(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDailyGenExhausted(true);
+      })
+      .finally(() => {
+        dailyGenInFlight.current = false;
+        if (!cancelled) setDailyOutfitLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      dailyGenInFlight.current = false;
+    };
+  }, [user, items, weather?.temp, weather?.description, dailySuggestions.length, dailyGenExhausted]);
 
   useFocusEffect(
     React.useCallback(() => { void refetch(); }, [refetch]),
   );
+
+  const refreshDailyOutfit = () => {
+    setDailyGenExhausted(false);
+    setDailySuggestions([]);
+    setActiveSuggestion(0);
+  };
 
   const filtered = activeCategory === "전체"
     ? items
@@ -272,7 +344,34 @@ export function HomeScreen({ navigation }: Props): React.JSX.Element {
               </View>
             )}
 
-            {dailySuggestions.length > 0 ? (
+            {items.length > 0 && (dailySuggestions.length > 0 || dailyOutfitLoading) ? (
+              <View style={styles.todayHeaderRow}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={styles.todayLabel}>오늘의 코디</Text>
+                  <Text style={styles.todaySub}>
+                    {dailySuggestions.length > 0
+                      ? "맞춤 3벌 — 마음에 들면 스타일 추천으로 이어가 보세요"
+                      : "AI가 옷장과 날씨를 보고 조합 중이에요"}
+                  </Text>
+                </View>
+                <Pressable
+                  style={({ pressed }) => [styles.todayRefreshBtn, pressed && { opacity: 0.75 }]}
+                  onPress={refreshDailyOutfit}
+                  disabled={dailyOutfitLoading}
+                  accessibilityRole="button"
+                  accessibilityLabel="오늘의 코디 새로고침"
+                >
+                  <Ionicons name="refresh" size={20} color={dailyOutfitLoading ? colors.zinc300 : colors.zinc700} />
+                </Pressable>
+              </View>
+            ) : null}
+
+            {dailyOutfitLoading && dailySuggestions.length === 0 && items.length > 0 ? (
+              <View style={styles.dailyLoadingCard}>
+                <ActivityIndicator color={colors.zinc900} />
+                <Text style={styles.dailyLoadingText}>오늘의 코디 준비 중…</Text>
+              </View>
+            ) : dailySuggestions.length > 0 ? (
               <View style={styles.suggestionsWrap}>
                 <ScrollView
                   horizontal pagingEnabled
@@ -459,6 +558,34 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFBEB", paddingVertical: 2, paddingHorizontal: 8,
     borderRadius: radius.full, overflow: "hidden",
   },
+
+  todayHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  todayLabel: { fontSize: 16, fontWeight: "700", color: colors.zinc900, letterSpacing: -0.3 },
+  todaySub: { fontSize: 12, color: colors.zinc500, marginTop: 2 },
+  todayRefreshBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.zinc100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dailyLoadingCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.zinc50,
+    borderRadius: radius.lg,
+    paddingVertical: 18,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  dailyLoadingText: { fontSize: 14, fontWeight: "600", color: colors.zinc600 },
 
   suggestionsWrap: { marginBottom: spacing.lg },
   suggestionCard: {

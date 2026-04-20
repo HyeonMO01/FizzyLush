@@ -253,7 +253,7 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
                 </View>
                 <View style={styles.vizTextWrap}>
                   <Text style={styles.vizBtnTitle}>AI 코디 이미지 생성</Text>
-                  <Text style={styles.vizBtnSub}>가상 마네킹에 완성 코디를 입혀볼게요</Text>
+                  <Text style={styles.vizBtnSub}>내 옷(사진) 외형을 고정하고 나머지 조각만 얹은 참고 이미지예요</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.8)" />
               </View>
@@ -280,7 +280,7 @@ export function RecommendScreen({ route }: Props): React.JSX.Element {
               </View>
               <Image source={{ uri: outfitImageUrl }} style={styles.vizImage} resizeMode="cover" />
               <Text style={styles.vizDisclaimer}>
-                * AI가 추천 코디를 시각화한 이미지입니다. 실제 상품과 다를 수 있어요.
+                * 생성 이미지는 참고용입니다. 업로드한 옷과 완전히 같지 않을 수 있고, 아래 쇼핑 카드 실물·색상과도 다를 수 있어요.
               </Text>
             </View>
           ) : null}

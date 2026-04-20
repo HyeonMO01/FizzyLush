@@ -40,6 +40,8 @@ export function ensureFullResult(parsed: VisionRecommendationResult): VisionReco
     overallMood: parsed.overallMood || "",
     colorPalette: parsed.colorPalette || { primary: "", secondary: "", accent: "", harmony: "" },
     coordinationReason: parsed.coordinationReason || "",
+    visualAnchorEn: parsed.visualAnchorEn || "",
+    visualAnchorKo: parsed.visualAnchorKo || "",
     items: parsed.items.map((item) => ({
       ...item,
       colorInfo: item.colorInfo || "",
