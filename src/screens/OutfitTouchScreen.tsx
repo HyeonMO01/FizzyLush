@@ -22,7 +22,7 @@ import {
   requestCategoryOutfitRecommendation,
 } from "../services/openai";
 import { saveRecommendationHistory } from "../services/recommendationService";
-import { fetchNaverShoppingProduct } from "../services/naverShoppingService";
+import { buildNaverSearchQuery, fetchNaverShoppingProduct } from "../services/naverShoppingService";
 import { colors, radius, shadow, spacing } from "../theme";
 import { LoadingOverlay } from "../components/LoadingOverlay";
 import { DetectedGarmentItem, ShoppingProduct, VisionRecommendationResult } from "../types";
@@ -161,7 +161,13 @@ export function OutfitTouchScreen({ route }: Props): React.JSX.Element {
       let shopErr: string | null = null;
       for (let idx = 0; idx < recommendationResult.items.length; idx++) {
         const item = recommendationResult.items[idx];
-        const fetched = await fetchNaverShoppingProduct(item.searchKeyword);
+        const query = buildNaverSearchQuery(item.searchKeyword, {
+          category: item.category,
+          color: item.colorInfo,
+          material: item.materialInfo,
+          title: item.title,
+        });
+        const fetched = await fetchNaverShoppingProduct(query);
         nextMap[String(idx)] = fetched.product;
         if (fetched.error && !shopErr) {
           shopErr = fetched.error;
@@ -424,6 +430,12 @@ export function OutfitTouchScreen({ route }: Props): React.JSX.Element {
               <Text style={styles.summaryTitle}>AI 코디 요약</Text>
             </View>
             <Text style={styles.summaryText}>{result.summary}</Text>
+            {result.visualAnchorKo ? (
+              <View style={styles.anchorWrap}>
+                <Text style={styles.anchorLabel}>AI가 인식한 선택 옷</Text>
+                <Text style={styles.anchorText}>{result.visualAnchorKo}</Text>
+              </View>
+            ) : null}
             <View style={styles.tipRow}>
               <Ionicons name="bulb-outline" size={13} color={colors.warning} />
               <Text style={styles.tipText}>{result.styleTip}</Text>
@@ -768,6 +780,18 @@ const styles = StyleSheet.create({
   },
   summaryTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
   summaryText: { fontSize: 14, color: colors.text, lineHeight: 22 },
+  anchorWrap: {
+    marginTop: 10,
+    marginBottom: 2,
+    padding: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.zinc200,
+    backgroundColor: colors.zinc50,
+    gap: 4,
+  },
+  anchorLabel: { fontSize: 11, fontWeight: "700", color: colors.zinc500 },
+  anchorText: { fontSize: 12, lineHeight: 18, color: colors.zinc700 },
   tipRow: {
     flexDirection: "row",
     alignItems: "flex-start",

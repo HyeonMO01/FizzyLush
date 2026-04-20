@@ -10,7 +10,9 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
+import { RootStackParamList } from "../navigation/RootNavigator";
 import { useAuth } from "../hooks/useAuth";
 import {
   deleteRecommendationHistory,
@@ -22,7 +24,7 @@ import { colors, radius } from "../theme";
 
 export function RecommendationHistoryScreen(): React.JSX.Element {
   const { user } = useAuth();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [list, setList] = useState<RecommendationHistory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,6 +185,20 @@ export function RecommendationHistoryScreen(): React.JSX.Element {
               {categories.join(" · ")}
             </Text>
           )}
+          {item.feedback === "dislike" ? (
+            <Pressable
+              style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.8 }]}
+              onPress={() => {
+                navigation.navigate("Recommend", {
+                  wardrobeItemId: item.wardrobeItemId,
+                  imageUrl: item.imageUrl,
+                });
+              }}
+            >
+              <Ionicons name="refresh" size={13} color="#fff" />
+              <Text style={styles.retryBtnText}>이 조건으로 다시 추천</Text>
+            </Pressable>
+          ) : null}
         </View>
       </Pressable>
     );
@@ -293,6 +309,18 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   cardCategories: { fontSize: 11, color: colors.zinc400 },
+  retryBtn: {
+    marginTop: 6,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.zinc900,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  retryBtnText: { fontSize: 11, fontWeight: "700", color: "#fff" },
 
   emptyWrap: {
     flex: 1,

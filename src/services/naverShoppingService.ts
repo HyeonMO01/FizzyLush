@@ -129,10 +129,52 @@ export async function searchNaverShoppingProducts(
   return products;
 }
 
-export async function fetchNaverShoppingProduct(query: string): Promise<NaverSingleFetchResult> {
+function compactToken(v?: string): string {
+  return (v || "").replace(/\s+/g, " ").trim();
+}
+
+function dedupeTokens(tokens: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const token of tokens) {
+    const t = compactToken(token);
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
+/**
+ * 네이버 쇼핑 검색 정확도 보강용 키워드 조합.
+ * 기본 searchKeyword + 색상/소재/카테고리 힌트를 합쳐 노이즈를 줄인다.
+ */
+export function buildNaverSearchQuery(
+  baseQuery: string,
+  hints?: { category?: string; color?: string; material?: string; title?: string },
+): string {
+  const base = compactToken(baseQuery);
+  const category = compactToken(hints?.category);
+  const color = compactToken(hints?.color);
+  const material = compactToken(hints?.material);
+  const title = compactToken(hints?.title);
+  const colorHead = color.split(/[,\-/]/)[0];
+  const materialHead = material.split(/[,\-/]/)[0];
+  const titleHead = title.split(/[,\-/]/)[0];
+  const merged = dedupeTokens([base, colorHead, materialHead, category, titleHead]);
+  return merged.join(" ").trim().slice(0, 120);
+}
+
+export async function fetchNaverShoppingProduct(
+  query: string,
+  hints?: { category?: string; color?: string; material?: string; title?: string },
+): Promise<NaverSingleFetchResult> {
   try {
+    const finalQuery = buildNaverSearchQuery(query, hints);
     const data = await proxyGet<NaverShoppingResponse>(
-      `/api/naver/shop-search?query=${encodeURIComponent(query)}&display=5&sort=sim`,
+      `/api/naver/shop-search?query=${encodeURIComponent(finalQuery || query)}&display=5&sort=sim`,
       NAVER_PROXY_GET_OPTS,
     );
     const apiErr = naverApiErrorMessage(data);

@@ -55,7 +55,16 @@ export function ensureFullResult(parsed: VisionRecommendationResult): VisionReco
 export function parseRecommendationPayload(payload: string): VisionRecommendationResult | null {
   try {
     const parsed = JSON.parse(payload) as unknown;
-    return isValidRecommendationResult(parsed) ? parsed : null;
+    if (isValidRecommendationResult(parsed)) return parsed;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "payload" in parsed &&
+      isValidRecommendationResult((parsed as { payload?: unknown }).payload)
+    ) {
+      return (parsed as { payload: VisionRecommendationResult }).payload;
+    }
+    return null;
   } catch {
     return null;
   }

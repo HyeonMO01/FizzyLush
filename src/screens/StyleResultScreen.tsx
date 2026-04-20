@@ -19,6 +19,7 @@ import { colors, radius, spacing } from "../theme";
 import { ShoppingProduct, VisionRecommendationResult } from "../types";
 import { requestVisionRecommendation } from "../services/openai";
 import {
+  buildNaverSearchQuery,
   fetchNaverShoppingProducts,
   NAVER_SHOP_FETCH_CONCURRENCY,
 } from "../services/naverShoppingService";
@@ -119,7 +120,16 @@ export function StyleResultScreen({ route, navigation }: Props): React.JSX.Eleme
         newResult.items,
         NAVER_SHOP_FETCH_CONCURRENCY,
         async (item) =>
-          fetchNaverShoppingProducts(item.searchKeyword, 8, { budget: budgetStr }).then((r) => ({
+          fetchNaverShoppingProducts(
+            buildNaverSearchQuery(item.searchKeyword, {
+              category: item.category,
+              color: item.colorInfo,
+              material: item.materialInfo,
+              title: item.title,
+            }),
+            8,
+            { budget: budgetStr },
+          ).then((r) => ({
             category: item.category,
             ...r,
           })),
@@ -177,6 +187,12 @@ export function StyleResultScreen({ route, navigation }: Props): React.JSX.Eleme
       {/* Summary */}
       <View style={styles.summaryCard}>
         <Text style={styles.summaryText}>{result.summary}</Text>
+        {result.visualAnchorKo ? (
+          <View style={styles.anchorWrap}>
+            <Text style={styles.anchorLabel}>AI가 인식한 내 옷</Text>
+            <Text style={styles.anchorText}>{result.visualAnchorKo}</Text>
+          </View>
+        ) : null}
       </View>
 
       {shoppingError ? (
@@ -477,6 +493,17 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   summaryText: { fontSize: 14, fontWeight: "600", color: colors.zinc900, lineHeight: 21 },
+  anchorWrap: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.zinc200,
+    backgroundColor: "#fff",
+    gap: 4,
+  },
+  anchorLabel: { fontSize: 11, fontWeight: "700", color: colors.zinc500 },
+  anchorText: { fontSize: 12, color: colors.zinc700, lineHeight: 18 },
 
   shopErrorBanner: {
     flexDirection: "row",

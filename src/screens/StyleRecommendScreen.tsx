@@ -19,6 +19,7 @@ import { useWardrobeList } from "../hooks/useWardrobeList";
 import { getUserProfile } from "../services/userProfileService";
 import { requestVisionRecommendation } from "../services/openai";
 import {
+  buildNaverSearchQuery,
   fetchNaverShoppingProducts,
   NAVER_SHOP_FETCH_CONCURRENCY,
 } from "../services/naverShoppingService";
@@ -90,7 +91,16 @@ export function StyleRecommendScreen(): React.JSX.Element {
         result.items,
         NAVER_SHOP_FETCH_CONCURRENCY,
         async (item) =>
-          fetchNaverShoppingProducts(item.searchKeyword, 8, { budget: budgetStr }).then((r) => ({
+          fetchNaverShoppingProducts(
+            buildNaverSearchQuery(item.searchKeyword, {
+              category: item.category,
+              color: item.colorInfo,
+              material: item.materialInfo,
+              title: item.title,
+            }),
+            8,
+            { budget: budgetStr },
+          ).then((r) => ({
             category: item.category,
             ...r,
           })),
